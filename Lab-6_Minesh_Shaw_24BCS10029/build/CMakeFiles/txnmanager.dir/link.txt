@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/txnmanager.dir/main.cpp.o CMakeFiles/txnmanager.dir/TransactionManager.cpp.o -o txnmanager 
