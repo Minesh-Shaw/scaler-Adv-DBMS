@@ -22,6 +22,10 @@ struct TableMetadata {
     
     // Concurrency protection for modifying the sstable list during compactions
     mutable std::shared_mutex sstable_mutex;
+
+    // Add these inside struct TableMetadata
+    std::unique_ptr<MemTable> memtable = std::make_unique<MemTable>();
+    std::unique_ptr<WAL> wal = std::make_unique<WAL>("wal_" + std::to_string(oid) + ".log");
 };
 
 class Catalog {
