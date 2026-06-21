@@ -16,22 +16,21 @@
 using namespace minidb;
 
 void PrintMetrics(const std::string& engine, double write_ops, double read_ops) {
-    std::cout << std::left << std::setw(15) << engine 
+    std::cout << std::left << std::setw(25) << engine 
               << "| " << std::setw(15) << write_ops 
               << "| " << std::setw(15) << read_ops << "\n";
 }
 
 void RunBenchmark(int num_records) {
     std::cout << "\n=======================================================\n";
-    std::cout << " MiniDB Track C Benchmark: LSM-Tree vs B+ Tree \n";
-    std::cout << " Workload: " << num_records << " Records\n";
+    std::cout << " MiniDB Track C Benchmark: LSM vs Disk-Backed B+ Tree \n";
+    std::cout << " Workload: " << num_records << " Records (Forces Buffer Pool Eviction)\n";
     std::cout << "=======================================================\n";
-    std::cout << std::left << std::setw(15) << "Engine" 
+    std::cout << std::left << std::setw(25) << "Engine" 
               << "| " << std::setw(15) << "Writes (ops/s)" 
               << "| " << std::setw(15) << "Reads (ops/s)" << "\n";
     std::cout << "-------------------------------------------------------\n";
 
-    // Prepare Dataset
     std::vector<std::string> keys;
     std::vector<std::string> values;
     for (int i = 0; i < num_records; ++i) {
@@ -40,7 +39,7 @@ void RunBenchmark(int num_records) {
     }
 
     // ==========================================
-    // 1. Benchmark: LSM-Tree (Your implementation)
+    // 1. LSM-Tree Benchmark (Sequential I/O)
     // ==========================================
     Catalog catalog;
     LockManager lock_manager;
@@ -48,7 +47,6 @@ void RunBenchmark(int num_records) {
     Schema schema({Column("id", TypeId::INTEGER, 4), Column("payload", TypeId::VARCHAR, 255)});
     TableMetadata* table = catalog.CreateTable("lsm_table", schema);
 
-    // LSM Write Test
     auto start_lsm_write = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < num_records; ++i) {
         InternalKey ikey{table->oid, keys[i]};
@@ -56,11 +54,11 @@ void RunBenchmark(int num_records) {
         table->wal->Append(LogRecordType::PUT, ikey.Encode(), row.Serialize());
         table->memtable->Put(ikey, row);
     }
+    table->wal->Flush(); // Single sequential Group Commit
     auto end_lsm_write = std::chrono::high_resolution_clock::now();
-    double lsm_write_time = std::chrono::duration<double, std::milli>(end_lsm_write - start_lsm_write).count();
-    double lsm_writes_per_sec = (num_records / lsm_write_time) * 1000.0;
+    
+    double lsm_writes_per_sec = (num_records / std::chrono::duration<double, std::milli>(end_lsm_write - start_lsm_write).count()) * 1000.0;
 
-    // LSM Read Test
     auto start_lsm_read = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < num_records; ++i) {
         InternalKey ikey{table->oid, keys[i]};
@@ -68,48 +66,39 @@ void RunBenchmark(int num_records) {
         table->memtable->Get(ikey, &out_row);
     }
     auto end_lsm_read = std::chrono::high_resolution_clock::now();
-    double lsm_read_time = std::chrono::duration<double, std::milli>(end_lsm_read - start_lsm_read).count();
-    double lsm_reads_per_sec = (num_records / lsm_read_time) * 1000.0;
-
-    PrintMetrics("LSM-Tree", lsm_writes_per_sec, lsm_reads_per_sec);
+    
+    double lsm_reads_per_sec = (num_records / std::chrono::duration<double, std::milli>(end_lsm_read - start_lsm_read).count()) * 1000.0;
+    PrintMetrics("LSM-Tree (Sequential)", lsm_writes_per_sec, lsm_reads_per_sec);
 
     // ==========================================
-    // 2. Benchmark: B+ Tree Baseline
+    // 2. B+ Tree Benchmark (Random I/O)
     // ==========================================
-    BPlusTree btree(100);
+    // Set node capacity to 50 to ensure we generate enough pages to overflow the buffer pool
+    BPlusTree btree(50);
 
-    // B+ Tree Write Test
     auto start_btree_write = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < num_records; ++i) {
         btree.Insert(keys[i], values[i]);
     }
     auto end_btree_write = std::chrono::high_resolution_clock::now();
-    double btree_write_time = std::chrono::duration<double, std::milli>(end_btree_write - start_btree_write).count();
-    double btree_writes_per_sec = (num_records / btree_write_time) * 1000.0;
+    
+    double btree_writes_per_sec = (num_records / std::chrono::duration<double, std::milli>(end_btree_write - start_btree_write).count()) * 1000.0;
 
-    // B+ Tree Read Test
     auto start_btree_read = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < num_records; ++i) {
         btree.Search(keys[i]);
     }
     auto end_btree_read = std::chrono::high_resolution_clock::now();
-    double btree_read_time = std::chrono::duration<double, std::milli>(end_btree_read - start_btree_read).count();
-    double btree_reads_per_sec = (num_records / btree_read_time) * 1000.0;
-
-    PrintMetrics("B+ Tree", btree_writes_per_sec, btree_reads_per_sec);
-    std::cout << "=======================================================\n";
     
-    // Quick analytical summary
-    std::cout << "\n[Analysis]\n";
-    if (lsm_writes_per_sec > btree_writes_per_sec) {
-        std::cout << "-> LSM-Tree won Write Throughput (Expected: Append-only bypasses node splitting overhead).\n";
-    }
-    if (btree_reads_per_sec > lsm_reads_per_sec) {
-        std::cout << "-> B+ Tree won Read Latency (Expected: Direct point lookups bypass MemTable/SSTable scanning).\n";
-    }
+    double btree_reads_per_sec = (num_records / std::chrono::duration<double, std::milli>(end_btree_read - start_btree_read).count()) * 1000.0;
+
+    PrintMetrics("B+ Tree (Random Disk)", btree_writes_per_sec, btree_reads_per_sec);
+    std::cout << "=======================================================\n";
 }
 
 int main() {
-    RunBenchmark(50000); 
+    // Run 100,000 records. This mathematically guarantees the B+ tree exceeds
+    // its simulated 100-page Buffer Pool and begins heavily thrashing the disk.
+    RunBenchmark(100000); 
     return 0;
 }

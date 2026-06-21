@@ -36,6 +36,8 @@ bool InsertExecutor::Next(Row* row) {
         insert_count++;
     }
 
+    table->wal->Flush();
+
     // Output the result of the operation
     row->columns = { std::to_string(insert_count) };
     has_run_ = true;
