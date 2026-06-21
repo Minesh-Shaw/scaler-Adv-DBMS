@@ -26,6 +26,9 @@ add_library(minidb_core STATIC
     src/recovery/wal.cpp
     src/catalog/catalog.cpp
     src/concurrency/lock_manager.cpp
+
+    src/storage/btree/bplus_tree.cpp
+
     src/execution/insert_executor.cpp
     src/execution/seq_scan_executor.cpp
     src/execution/join_executor.cpp
