@@ -1,0 +1,44 @@
+cmake_minimum_required(VERSION 3.14)
+project(MiniDB VERSION 1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_compile_options(-Wall -Wextra -Wpedantic -Werror=return-type)
+
+find_package(Threads REQUIRED)
+
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  URL https://github.com/google/googletest/archive/v1.14.0.zip
+)
+
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+add_library(minidb_core STATIC
+    src/storage/lsm/memtable.cpp
+    src/storage/lsm/sstable_writer.cpp
+    src/storage/lsm/sstable_reader.cpp
+    src/storage/lsm/compactor.cpp
+    src/recovery/wal.cpp
+    src/catalog/catalog.cpp
+    src/concurrency/lock_manager.cpp
+)
+
+target_include_directories(minidb_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+target_link_libraries(minidb_core PUBLIC Threads::Threads)
+
+add_executable(minidb src/main.cpp)
+target_link_libraries(minidb PRIVATE minidb_core)
+
+enable_testing()
+
+add_executable(lsm_test tests/lsm_test.cpp)
+target_link_libraries(lsm_test PRIVATE minidb_core gtest_main)
+
+include(GoogleTest)
+gtest_discover_tests(lsm_test)
