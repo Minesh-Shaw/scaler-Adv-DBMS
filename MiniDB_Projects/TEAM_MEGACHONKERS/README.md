@@ -94,3 +94,14 @@ ctest --output-on-failure
 # 5. Run the performance benchmark
 ./lsm_benchmark
 ```
+
+## Team Details 
+
+### Team Name:
+TEAM_MEGACHONKERS
+
+### Team Members: 
+1. Minesh Shaw (minesh.24bcs10029@sst.scaler.com)
+2. Sneha Raj (sneha.24bcs10295@sst.scaler.com)
+3. Nirbhay (nirbhay.24bcs10030@sst.scaler.com)
+4. Adam (adam.24bcs10017@sst.scaler.com)
