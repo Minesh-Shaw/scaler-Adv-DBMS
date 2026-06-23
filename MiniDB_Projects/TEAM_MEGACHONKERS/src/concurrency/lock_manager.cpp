@@ -11,6 +11,11 @@ bool LockManager::LockShared(Transaction* txn, const std::string& lock_key) {
                                " violated 2PL: requested lock in Shrinking phase.");
     }
 
+    // FIX: Re-entrant Lock Prevention
+    if (txn->GetSharedLockSet().count(lock_key) > 0 || txn->GetExclusiveLockSet().count(lock_key) > 0) {
+        return true; // The transaction already holds adequate permissions
+    }
+
     std::unique_lock<std::mutex> lock(latch_);
     LockRequestQueue& queue = lock_table_[lock_key];
 
@@ -30,10 +35,29 @@ bool LockManager::LockExclusive(Transaction* txn, const std::string& lock_key) {
                                " violated 2PL: requested lock in Shrinking phase.");
     }
 
+    // FIX: Re-entrant Lock Prevention
+    if (txn->GetExclusiveLockSet().count(lock_key) > 0) {
+        return true; // Already holds an exclusive lock
+    }
+
     std::unique_lock<std::mutex> lock(latch_);
     LockRequestQueue& queue = lock_table_[lock_key];
 
-    // Wait until NO other transaction holds a shared lock AND no one holds an exclusive lock
+    // FIX: Lock Upgrade Logic (Shared -> Exclusive)
+    if (txn->GetSharedLockSet().count(lock_key) > 0) {
+        // Wait until we are the ONLY transaction holding a shared lock
+        queue.cv_.wait(lock, [&queue]() { return queue.shared_count_ == 1 && !queue.is_exclusive_active_; });
+        
+        // Upgrade the lock
+        queue.shared_count_--;
+        txn->RemoveSharedLock(lock_key);
+        
+        queue.is_exclusive_active_ = true;
+        txn->AddExclusiveLock(lock_key);
+        return true;
+    }
+
+    // Standard Exclusive Lock: Wait until NO shared locks AND no exclusive locks
     queue.cv_.wait(lock, [&queue]() { 
         return queue.shared_count_ == 0 && !queue.is_exclusive_active_; 
     });

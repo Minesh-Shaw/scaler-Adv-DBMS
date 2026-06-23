@@ -20,6 +20,10 @@ TableMetadata* Catalog::CreateTable(const std::string& table_name, const Schema&
     table_meta->name = table_name;
     table_meta->schema = std::make_unique<Schema>(schema);
 
+    // FIX: Initialize MemTable and WAL *after* the valid OID has been assigned
+    table_meta->memtable = std::make_unique<MemTable>();
+    table_meta->wal = std::make_unique<WAL>("wal_" + std::to_string(table_oid) + ".log");
+
     // Store raw pointer for returning before we move the unique_ptr into the map
     TableMetadata* result = table_meta.get();
 

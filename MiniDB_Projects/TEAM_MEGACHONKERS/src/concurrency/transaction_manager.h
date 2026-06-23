@@ -45,6 +45,25 @@ public:
         std::lock_guard<std::mutex> lock(latch_);
         active_transactions_.erase(txn->GetTransactionId());
     }
+
+    // FIX: Added Abort method to safely clean up and release locks upon failures
+    void Abort(Transaction* txn) {
+        txn->SetState(TransactionState::ABORTED);
+
+        // Copy the lock sets to prevent Iterator Invalidation when Unlock() removes elements
+        auto shared_locks = txn->GetSharedLockSet();
+        auto exclusive_locks = txn->GetExclusiveLockSet();
+
+        for (const auto& lock_key : shared_locks) {
+            lock_manager_->Unlock(txn, lock_key);
+        }
+        for (const auto& lock_key : exclusive_locks) {
+            lock_manager_->Unlock(txn, lock_key);
+        }
+
+        std::lock_guard<std::mutex> lock(latch_);
+        active_transactions_.erase(txn->GetTransactionId());
+    }
 };
 
 } // namespace minidb

@@ -44,8 +44,13 @@ bool Compactor::Compact(const std::vector<std::string>& input_sstables, const st
 
     if (success) {
         // Atomic cleanup: Only delete the old files if the new one was written successfully
+        std::error_code ec;
         for (const auto& file_path : input_sstables) {
-            std::filesystem::remove(file_path);
+            // FIX: Catch OS-level filesystem exceptions safely to prevent compaction crashes
+            std::filesystem::remove(file_path, ec);
+            if (ec) {
+                LOG_ERROR("Failed to delete old SSTable during compaction: " + ec.message());
+            }
         }
         LOG_INFO("Compaction complete. Created unified SSTable: " + output_sstable);
     } else {

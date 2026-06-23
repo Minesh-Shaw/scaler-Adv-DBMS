@@ -1,4 +1,5 @@
 #include "recovery/wal.h"
+#include "common/logger.h"
 #include <filesystem>
 
 namespace minidb {
@@ -43,7 +44,15 @@ void WAL::Flush() {
 void WAL::Clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     log_stream_.close();
-    std::filesystem::remove(log_file_path_);
+    
+    // FIX: Catch OS-level filesystem exceptions safely
+    std::error_code ec;
+    std::filesystem::remove(log_file_path_, ec);
+    if (ec) {
+        // Log the error but prevent the engine from fatally crashing
+        LOG_ERROR("Failed to remove WAL file during Clear(): " + ec.message());
+    }
+
     log_stream_.open(log_file_path_, std::ios::app | std::ios::binary);
     current_lsn_ = 0;
 }

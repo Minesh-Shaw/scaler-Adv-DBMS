@@ -1,4 +1,5 @@
 #include "storage/btree/bplus_tree.h"
+#include "common/logger.h" // Needed for logging errors
 #include <mutex>
 #include <filesystem>
 #include <iostream>
@@ -8,7 +9,15 @@ namespace minidb {
 BPlusTree::BPlusTree(size_t order) : order_(order) {
     // Initialize a physical disk file to act as our storage medium
     std::string filename = "btree_pages.db";
-    std::filesystem::remove(filename);
+    
+    // FIX: Catch OS-level filesystem exceptions safely to prevent startup crashes
+    std::error_code ec;
+    std::filesystem::remove(filename, ec);
+    if (ec) {
+        LOG_ERROR("Warning: Failed to remove old B+ Tree disk file: " + ec.message());
+        // We continue because the std::ios::trunc below will overwrite it anyway,
+        // but now we won't fatally crash if Windows Defender is scanning the file.
+    }
     
     // Create and truncate
     disk_file_.open(filename, std::ios::out | std::ios::binary | std::ios::trunc);

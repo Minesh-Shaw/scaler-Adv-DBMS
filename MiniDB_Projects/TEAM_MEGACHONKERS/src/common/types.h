@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <common/config.h>
+#include "common/config.h" // FIX: Switched to quotes for local project headers
 
 namespace minidb {
 
@@ -45,6 +45,13 @@ struct InternalKey {
         buffer.append(reinterpret_cast<const char*>(&table_id), sizeof(table_id));
         buffer.append(user_key);
         return buffer;
+    }
+
+    // FIX: Added Decode function for symmetry and safe extraction
+    static InternalKey Decode(const std::string& data) {
+        table_oid_t oid = *reinterpret_cast<const table_oid_t*>(data.data());
+        std::string u_key = data.substr(sizeof(table_oid_t));
+        return InternalKey{oid, u_key};
     }
 };
 

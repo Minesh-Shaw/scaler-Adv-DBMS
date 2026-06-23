@@ -71,11 +71,8 @@ void RecoveryManager::ReplayWAL(const std::string& wal_file_path, TableMetadata*
             if (!log_stream.read(&val[0], val_size)) break;
         }
 
-        // Decode the binary InternalKey (Extracts Table OID + String Key)
-        const char* key_data = key.data();
-        table_oid_t oid = *reinterpret_cast<const table_oid_t*>(key_data);
-        std::string actual_key = key.substr(sizeof(table_oid_t));
-        InternalKey decoded_key{oid, actual_key};
+        // FIX: Utilize the secure Decode function instead of raw pointer arithmetic
+        InternalKey decoded_key = InternalKey::Decode(key);
 
         // Replay the operation into the MemTable
         if (type == LogRecordType::PUT) {

@@ -24,6 +24,11 @@ bool InsertExecutor::Next(Row* row) {
 
     // Pull rows from the child operator
     while (child_executor_->Next(&child_row)) {
+        // Robustness Check: Prevent crash if the child operator yielded an empty row
+        if (child_row.columns.empty()) {
+            continue;
+        }
+
         std::string primary_key = child_row.columns[0];
         InternalKey lsm_key{table_oid_, primary_key};
 

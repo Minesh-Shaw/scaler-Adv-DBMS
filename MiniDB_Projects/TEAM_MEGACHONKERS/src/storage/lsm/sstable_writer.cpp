@@ -31,9 +31,8 @@ bool SSTableWriter::WriteSSTable(const std::string& file_path, const std::map<st
         entry_count++;
     }
 
-    // Write a simple metadata footer at the very end of the file.
-    // [Total Entries: 4 bytes]
-    out.write(reinterpret_cast<const char*>(&entry_count), sizeof(entry_count));
+    // FIX: Removed the entry_count footer. The reader's EOF peek loop naturally 
+    // terminates without it. Leaving it caused the reader to parse the footer as a corrupted key.
 
     out.flush();
     out.close();

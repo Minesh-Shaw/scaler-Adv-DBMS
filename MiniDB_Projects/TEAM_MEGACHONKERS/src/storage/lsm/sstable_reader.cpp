@@ -18,18 +18,14 @@ SearchResult SSTableReader::FindKey(const std::string& file_path, const Internal
     while (in.peek() != EOF) {
         uint32_t key_size = 0;
         
-        // Attempt to read the next key_size. If we fail, we hit the footer.
-        if (!in.read(reinterpret_cast<char*>(&key_size), sizeof(key_size))) {
-            break; 
-        }
+        // FIX: Strict stream validation at every step to prevent parsing ghost data
+        if (!in.read(reinterpret_cast<char*>(&key_size), sizeof(key_size))) break; 
 
-        // We hit the 4-byte footer (Total Entries) if key_size looks suspiciously like an entry count
-        // and we are at the end of the file. A safer way is to check the file position.
         std::string current_key(key_size, '\0');
-        in.read(&current_key[0], key_size);
+        if (!in.read(&current_key[0], key_size)) break;
 
         uint32_t val_size = 0;
-        in.read(reinterpret_cast<char*>(&val_size), sizeof(val_size));
+        if (!in.read(reinterpret_cast<char*>(&val_size), sizeof(val_size))) break;
 
         // If this is the key we are looking for
         if (current_key == encoded_target) {
@@ -39,7 +35,7 @@ SearchResult SSTableReader::FindKey(const std::string& file_path, const Internal
             }
 
             std::string current_val(val_size, '\0');
-            in.read(&current_val[0], val_size);
+            if (!in.read(&current_val[0], val_size)) break;
 
             if (out_row != nullptr) {
                 *out_row = Row::Deserialize(current_val);
@@ -62,17 +58,18 @@ std::map<std::string, std::string> SSTableReader::ReadAll(const std::string& fil
 
     while (in.peek() != EOF) {
         uint32_t key_size = 0;
+        // FIX: Strict stream validation to prevent ghost tombstones from being inserted
         if (!in.read(reinterpret_cast<char*>(&key_size), sizeof(key_size))) break;
 
         std::string current_key(key_size, '\0');
-        in.read(&current_key[0], key_size);
+        if (!in.read(&current_key[0], key_size)) break;
 
         uint32_t val_size = 0;
-        in.read(reinterpret_cast<char*>(&val_size), sizeof(val_size));
+        if (!in.read(reinterpret_cast<char*>(&val_size), sizeof(val_size))) break;
 
         std::string current_val(val_size, '\0');
         if (val_size > 0) {
-            in.read(&current_val[0], val_size);
+            if (!in.read(&current_val[0], val_size)) break;
         }
 
         entries[current_key] = current_val;

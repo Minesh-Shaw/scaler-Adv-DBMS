@@ -45,16 +45,21 @@ bool NestedLoopJoinExecutor::Next(Row* row) {
         
         // Inner Loop: Scan the right child for a match
         while (right_child_->Next(&right_row)) {
-            // Evaluate the Equi-Join Predicate
-            if (current_left_row_.columns[left_col_idx_] == right_row.columns[right_col_idx_]) {
+            // Robustness Check: Ensure we don't access indexes out of bounds
+            if (left_col_idx_ < current_left_row_.columns.size() && 
+                right_col_idx_ < right_row.columns.size()) {
                 
-                // Match found! Concatenate the left and right rows into a single output tuple
-                row->columns = current_left_row_.columns;
-                row->columns.insert(row->columns.end(), 
-                                    right_row.columns.begin(), 
-                                    right_row.columns.end());
-                
-                return true; // Yield this combined row up the pipeline
+                // Evaluate the Equi-Join Predicate
+                if (current_left_row_.columns[left_col_idx_] == right_row.columns[right_col_idx_]) {
+                    
+                    // Match found! Concatenate the left and right rows into a single output tuple
+                    row->columns = current_left_row_.columns;
+                    row->columns.insert(row->columns.end(), 
+                                        right_row.columns.begin(), 
+                                        right_row.columns.end());
+                    
+                    return true; // Yield this combined row up the pipeline
+                }
             }
         }
 

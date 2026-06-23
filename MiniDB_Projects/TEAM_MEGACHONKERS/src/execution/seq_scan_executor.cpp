@@ -15,7 +15,13 @@ void SeqScanExecutor::Init() {
     for (const auto& file_path : table->sstable_paths) {
         auto file_data = SSTableReader::ReadAll(file_path);
         for (const auto& [key, value] : file_data) {
-            merged_view_[key] = value;
+            // Robustness Check: Only load keys that belong to this table's OID
+            if (key.size() >= sizeof(table_oid_t)) {
+                table_oid_t key_table_id = *reinterpret_cast<const table_oid_t*>(key.data());
+                if (key_table_id == table_oid_) {
+                    merged_view_[key] = value;
+                }
+            }
         }
     }
     lock.unlock(); // Drop lock before hitting the MemTable
@@ -23,7 +29,13 @@ void SeqScanExecutor::Init() {
     // 2. Load the absolute newest data from the MemTable
     auto mem_data = table->memtable->GetAllEntries();
     for (const auto& [key, value] : mem_data) {
-        merged_view_[key] = value;
+        // Robustness Check: Only load keys that belong to this table's OID
+        if (key.size() >= sizeof(table_oid_t)) {
+            table_oid_t key_table_id = *reinterpret_cast<const table_oid_t*>(key.data());
+            if (key_table_id == table_oid_) {
+                merged_view_[key] = value;
+            }
+        }
     }
 
     // 3. Set the cursor to the beginning of our merged snapshot
